@@ -1,0 +1,11 @@
+/dist
+*.log
+/build
+.env
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+*.exe
+*.dll

@@ -11,6 +11,7 @@ function App() {
   const [files, setFiles] = useState([])
   const [processedData, setProcessedData] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [devMode, setDevMode] = useState(false)
 
   const handleFilesAdded = useCallback((newFiles) => {
     setFiles(prev => [...prev, ...newFiles])
@@ -119,7 +120,9 @@ function App() {
                   percentage,
                   grades: studentQuestions,
                   sourceFile: file.name,
-                  metadata
+                  metadata,
+                  source: student.source || 'csv',  // Track source: csv or handwritten
+                  confidence: student.confidence || null  // For handwritten parsing confidence
                 })
               }
             }
@@ -336,7 +339,7 @@ function App() {
       case 'meta':
         return <MetaBuilder />
       case 'dashboard':
-        return processedData ? <Dashboard data={processedData} /> : (
+        return processedData ? <Dashboard data={processedData} devMode={devMode} /> : (
           <div className="main-content">
             <div className="empty-state">
               <div className="empty-icon">
@@ -434,6 +437,42 @@ function App() {
             </>
           )}
         </div>
+        
+        {devMode && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem',
+            marginLeft: 'auto',
+            padding: '0.25rem 0.5rem',
+            background: 'rgba(239, 68, 68, 0.2)',
+            borderRadius: '4px',
+            border: '1px solid rgba(239, 68, 68, 0.5)'
+          }}>
+            <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: '600' }}>DEV MODE</span>
+          </div>
+        )}
+        
+        <button
+          onClick={() => setDevMode(!devMode)}
+          style={{
+            background: devMode ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            padding: '0.4rem 0.6rem',
+            marginLeft: '0.5rem',
+            cursor: 'pointer',
+            color: devMode ? '#ef4444' : 'var(--text-secondary)',
+            fontSize: '0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem'
+          }}
+          title="Toggle Developer Mode"
+        >
+          <Settings size={14} />
+          {devMode ? 'ON' : 'OFF'}
+        </button>
       </nav>
 
       {renderContent()}

@@ -1,9 +1,12 @@
 import { useState, useRef } from 'react'
-import { Upload, FileText, X, Play, Trash2, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { Upload, FileText, X, Play, Trash2, ChevronDown, ChevronUp, Info, Clipboard } from 'lucide-react'
 
 function FileUpload({ files, onFilesAdded, onRemoveFile, onClearAll, onProcess, isProcessing }) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [showFormatHelp, setShowFormatHelp] = useState(false)
+  const [showPasteInput, setShowPasteInput] = useState(false)
+  const [pasteContent, setPasteContent] = useState('')
+  const [pasteError, setPasteError] = useState('')
   const fileInputRef = useRef(null)
 
   const handleDragOver = (e) => {
@@ -46,6 +49,45 @@ function FileUpload({ files, onFilesAdded, onRemoveFile, onClearAll, onProcess, 
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const handlePasteContent = () => {
+    setPasteError('')
+    if (!pasteContent.trim()) {
+      setPasteError('Please paste some content')
+      return
+    }
+    
+    // Create a synthetic file-like object from pasted content
+    const content = pasteContent.trim()
+    let filename = 'pasted-data.json'
+    let contentToPass = content
+    
+    // Detect if it's CSV or JSON
+    if (content.startsWith('{') || content.startsWith('[')) {
+      // Try to parse as JSON to validate
+      try {
+        JSON.parse(content)
+        filename = 'pasted-data.json'
+      } catch (e) {
+        setPasteError('Invalid JSON format')
+        return
+      }
+    } else if (content.includes(',') || content.includes('\t')) {
+      // Likely CSV
+      filename = 'pasted-data.csv'
+    } else {
+      setPasteError('Unrecognized format. Paste CSV or JSON content.')
+      return
+    }
+    
+    // Create a blob and treat it as a file
+    const blob = new Blob([content], { type: 'text/plain' })
+    const file = new File([blob], filename, { type: 'text/plain' })
+    
+    onFilesAdded([file])
+    setPasteContent('')
+    setShowPasteInput(false)
   }
 
   return (
@@ -193,6 +235,67 @@ function FileUpload({ files, onFilesAdded, onRemoveFile, onClearAll, onProcess, 
                 <li><strong>Confidence</strong> (optional, handwritten only): Parsing confidence (0.0 - 1.0)</li>
               </ul>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Paste Input Toggle */}
+      <div style={{ marginTop: '1rem' }}>
+        <button
+          onClick={() => setShowPasteInput(!showPasteInput)}
+          style={{
+            background: 'transparent',
+            border: '1px dashed var(--border-color)',
+            borderRadius: '8px',
+            padding: '0.5rem 1rem',
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            cursor: 'pointer',
+            color: 'var(--text-secondary)',
+            fontSize: '0.9rem'
+          }}
+        >
+          <Clipboard size={16} />
+          <span>Or paste CSV/JSON content directly</span>
+        </button>
+
+        {showPasteInput && (
+          <div style={{
+            marginTop: '0.75rem',
+            padding: '1rem',
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px'
+          }}>
+            <textarea
+              value={pasteContent}
+              onChange={(e) => setPasteContent(e.target.value)}
+              placeholder="Paste your CSV or JSON content here..."
+              style={{
+                width: '100%',
+                minHeight: '150px',
+                padding: '0.75rem',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontFamily: 'monospace',
+                fontSize: '0.85rem',
+                resize: 'vertical'
+              }}
+            />
+            {pasteError && (
+              <p style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.5rem' }}>{pasteError}</p>
+            )}
+            <button
+              onClick={handlePasteContent}
+              className="btn btn-primary"
+              style={{ marginTop: '0.75rem', width: '100%' }}
+            >
+              Add Pasted Content
+            </button>
           </div>
         )}
       </div>

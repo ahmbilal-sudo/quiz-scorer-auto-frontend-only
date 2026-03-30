@@ -4,7 +4,7 @@ import { Users, TrendingUp, CheckCircle, HelpCircle, BarChart3, PieChart, Award,
 
 Chart.register(...registerables)
 
-function Dashboard({ data }) {
+function Dashboard({ data, devMode = false }) {
   const scoreDistChartRef = useRef(null)
   const gradeDistChartRef = useRef(null)
   const questionPerfChartRef = useRef(null)
@@ -259,6 +259,46 @@ function Dashboard({ data }) {
           </div>
         </div>
       </div>
+
+      {/* Dev Mode Info Panel */}
+      {devMode && (
+        <div style={{
+          marginTop: '1.5rem',
+          padding: '1rem',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '8px'
+        }}>
+          <h4 style={{ color: '#ef4444', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            🔧 Developer Mode Info
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.85rem' }}>
+            <div>
+              <strong>Source Breakdown:</strong>
+              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0 }}>
+                <li>CSV Students: {students.filter(s => s.source === 'csv').length}</li>
+                <li>Handwritten: {students.filter(s => s.source === 'handwritten').length}</li>
+              </ul>
+            </div>
+            <div>
+              <strong>Data Stats:</strong>
+              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0 }}>
+                <li>Total Files Processed: {new Set(students.map(s => s.sourceFile)).size}</li>
+                <li>Total Questions: {questions.length}</li>
+                <li>Total Students: {students.length}</li>
+              </ul>
+            </div>
+            <div>
+              <strong>Question Types:</strong>
+              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0 }}>
+                {[...new Set(questions.map(q => q.type))].map(t => (
+                  <li key={t}>{t}: {questions.filter(q => q.type === t).length}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

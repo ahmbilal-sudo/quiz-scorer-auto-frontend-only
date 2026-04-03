@@ -1,10 +1,11 @@
 import { useState, useCallback, useMemo } from 'react'
-import { GraduationCap, LayoutDashboard, Users, BookOpen, Upload, FileText, X, BarChart3, PieChart, TrendingUp, Award, CheckCircle, HelpCircle, Settings } from 'lucide-react'
+import { GraduationCap, LayoutDashboard, Users, BookOpen, Upload, FileText, X, BarChart3, PieChart, TrendingUp, Award, CheckCircle, HelpCircle, Settings, GitCompare } from 'lucide-react'
 import FileUpload from './components/FileUpload'
 import Dashboard from './components/Dashboard'
 import StudentsTable from './components/StudentsTable'
 import QuestionsAnalysis from './components/QuestionsAnalysis'
 import MetaBuilder from './components/MetaBuilder'
+import StudentCompare from './components/StudentCompare'
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload')
@@ -383,6 +384,21 @@ function App() {
             </div>
           </div>
         )
+      case 'compare':
+        return processedData ? <StudentCompare data={processedData} /> : (
+          <div className="main-content">
+            <div className="empty-state">
+              <div className="empty-icon">
+                <GitCompare />
+              </div>
+              <h3>No Data Available</h3>
+              <p>Upload graded result files to compare students</p>
+              <button className="btn btn-primary" onClick={() => setActiveTab('upload')}>
+                Upload Files
+              </button>
+            </div>
+          </div>
+        )
       default:
         return <FileUpload files={files} onFilesAdded={handleFilesAdded} onRemoveFile={handleRemoveFile} onClearAll={handleClearAll} onProcess={handleProcess} isProcessing={isProcessing} />
     }
@@ -433,6 +449,13 @@ function App() {
               >
                 <BookOpen size={18} />
                 Questions
+              </button>
+              <button 
+                className={`nav-tab ${activeTab === 'compare' ? 'active' : ''}`}
+                onClick={() => setActiveTab('compare')}
+              >
+                <GitCompare size={18} />
+                Compare
               </button>
             </>
           )}

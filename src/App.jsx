@@ -1,11 +1,12 @@
-import { useState, useCallback, useMemo } from 'react'
-import { GraduationCap, LayoutDashboard, Users, BookOpen, Upload, FileText, X, BarChart3, PieChart, TrendingUp, Award, CheckCircle, HelpCircle, Settings, GitCompare } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { GraduationCap, LayoutDashboard, Users, BookOpen, Upload, FileText, X, BarChart3, PieChart, TrendingUp, Award, CheckCircle, HelpCircle, Settings, GitCompare, CheckSquare } from 'lucide-react'
 import FileUpload from './components/FileUpload'
 import Dashboard from './components/Dashboard'
 import StudentsTable from './components/StudentsTable'
 import QuestionsAnalysis from './components/QuestionsAnalysis'
 import MetaBuilder from './components/MetaBuilder'
 import StudentCompare from './components/StudentCompare'
+import GradingPage from './components/GradingPage'
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload')
@@ -13,6 +14,15 @@ function App() {
   const [processedData, setProcessedData] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [devMode, setDevMode] = useState(false)
+
+  // Handle OAuth callback - redirect to meta builder after auth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('auth') === 'success') {
+      setActiveTab('meta')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   const handleFilesAdded = useCallback((newFiles) => {
     setFiles(prev => [...prev, ...newFiles])
@@ -41,6 +51,93 @@ function App() {
       source: row['Source'] || row['source'] || '',  // CSV or Handwritten
       confidence: row['Confidence'] || row['confidence'] || null  // Parsing confidence
     }
+  }
+
+  // Process graded data from API response (for GradingPage)
+  const processGradedData = (gradedData) => {
+    const allStudents = []
+    const questionMap = new Map()
+    
+    const students = Array.isArray(gradedData) ? gradedData : [gradedData]
+    
+    students.forEach(student => {
+      if (student.status === 'success' && student.grades) {
+        const grades = student.grades
+        const results = grades.results || []
+        const metadata = student.metadata || {}
+        
+        const name = metadata.Name || metadata.name || metadata.student_name || 'Unknown'
+        const email = metadata.Email || metadata.email || ''
+        
+        const totalScore = grades.total_score || 0
+        const maxScore = grades.max_total_score || results.reduce((sum, r) => sum + (r.max_score || r.maxScore || 0), 0)
+        const percentage = grades.percentage || (maxScore > 0 ? (totalScore / maxScore) * 100 : 0)
+        
+        const studentQuestions = results.map((result, idx) => {
+          const qId = result.question_id || result.questionId || `Q${idx + 1}`
+          const qText = result.question_text || result.questionText || qId
+          const sAnswer = result.student_answer || result.studentAnswer || ''
+          const cAnswer = result.correct_answer || result.correctAnswer || ''
+          const scr = result.score || 0
+          const mScr = result.max_score || result.maxScore || 0
+          
+          if (!questionMap.has(qId)) {
+            questionMap.set(qId, {
+              id: qId,
+              question: qText,
+              scores: [],
+              maxScore: mScr,
+              correctAnswer: cAnswer,
+              type: result.question_type || result.questionType || 'Short'
+            })
+          }
+          
+          const qData = questionMap.get(qId)
+          qData.scores.push(scr)
+          qData.maxScore = Math.max(qData.maxScore, mScr)
+          
+          return {
+            questionId: qId,
+            questionText: qText,
+            studentAnswer: sAnswer,
+            score: scr,
+            maxScore: mScr,
+            feedback: result.feedback || '',
+            correctAnswer: cAnswer,
+            questionType: result.question_type || result.questionType || ''
+          }
+        })
+        
+        const studentKey = `${name}-${email}`.toLowerCase()
+        allStudents.push({
+          id: `graded-${allStudents.length}`,
+          name,
+          email,
+          totalScore,
+          maxScore,
+          percentage,
+          grades: studentQuestions,
+          sourceFile: 'graded',
+          metadata,
+          source: student.source || 'csv',
+          confidence: student.confidence || null
+        })
+      }
+    })
+    
+    // Build questions array from questionMap
+    const questions = Array.from(questionMap.values()).map(q => ({
+      id: q.id,
+      question: q.question,
+      avgScore: q.scores.length > 0 ? q.scores.reduce((a, b) => a + b, 0) / q.scores.length : 0,
+      maxScore: q.maxScore,
+      avgPercentage: q.maxScore > 0 ? ((q.scores.reduce((a, b) => a + b, 0) / q.scores.length) / q.maxScore) * 100 : 0,
+      totalResponses: q.scores.length,
+      correctAnswer: q.correctAnswer,
+      type: q.type
+    }))
+    
+    return { students: allStudents, questions }
   }
 
   const handleProcess = useCallback(async () => {
@@ -337,6 +434,20 @@ function App() {
             />
           </div>
         )
+      case 'grade':
+        return (
+          <div className="content-area">
+            <GradingPage 
+              devMode={devMode} 
+              onGradeComplete={(gradedData) => {
+                // Process the graded data like we do in handleProcess
+                const processed = processGradedData(gradedData)
+                setProcessedData(processed)
+              }}
+              onNavigate={(tab) => setActiveTab(tab)}
+            />
+          </div>
+        )
       case 'meta':
         return <MetaBuilder />
       case 'dashboard':
@@ -419,6 +530,13 @@ function App() {
           >
             <Upload size={18} />
             Upload
+          </button>
+          <button 
+            className={`nav-tab ${activeTab === 'grade' ? 'active' : ''}`}
+            onClick={() => setActiveTab('grade')}
+          >
+            <CheckSquare size={18} />
+            Grade
           </button>
           <button 
             className={`nav-tab ${activeTab === 'meta' ? 'active' : ''}`}

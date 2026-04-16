@@ -10,3 +10,6 @@
 Thumbs.db
 *.exe
 *.dll
+src/components/MetaBuilder - .jsx.old
+src/components/MetaBuilder - default no ngrok setup.jsx
+src/components/MetaBuilder - with ngrok headers.jsx

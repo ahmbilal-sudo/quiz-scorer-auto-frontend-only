@@ -7,8 +7,8 @@ import { Plus, Trash2, Download, Upload, Settings, Users, FileText, ChevronDown,
 
 const HOST_URL = import.meta.env.VITE_FRONTEND_URL;
 const API_URL = import.meta.env.VITE_BACKEND_URL;
-console.log(HOST_URL); // Should log "http://localhost:8000"
-console.log(API_URL); // Should log "http://localhost:8000"
+console.log(HOST_URL); // Should log "http://localhost:5147"
+console.log(API_URL); // Should log "http://localhost:3000"
 
 const QUESTION_TYPES = [
   { value: 'PI', label: 'Personal Info', needsAnswer: false },

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { GraduationCap, LayoutDashboard, Users, BookOpen, Upload, FileText, X, BarChart3, PieChart, TrendingUp, Award, CheckCircle, HelpCircle, Settings, GitCompare, CheckSquare } from 'lucide-react'
+import { GraduationCap, LayoutDashboard, Users, BookOpen, Upload, FileText, X, BarChart3, PieChart, TrendingUp, Award, CheckCircle, HelpCircle, Settings, GitCompare, CheckSquare, Home } from 'lucide-react'
 import FileUpload from './components/FileUpload'
 import Dashboard from './components/Dashboard'
 import StudentsTable from './components/StudentsTable'
@@ -7,9 +7,10 @@ import QuestionsAnalysis from './components/QuestionsAnalysis'
 import MetaBuilder from './components/MetaBuilder'
 import StudentCompare from './components/StudentCompare'
 import GradingPage from './components/GradingPage'
+import HomePage from './components/HomePage'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('upload')
+  const [activeTab, setActiveTab] = useState('home')
   const [files, setFiles] = useState([])
   const [processedData, setProcessedData] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -419,8 +420,14 @@ function App() {
     return { headers, rows }
   }
 
+  const handleNavigate = (tab) => {
+    setActiveTab(tab)
+  }
+
   const renderContent = () => {
     switch (activeTab) {
+      case 'home':
+        return <HomePage data={processedData} onNavigate={handleNavigate} />
       case 'upload':
         return (
           <div className="main-content">
@@ -525,11 +532,18 @@ function App() {
         
         <div className="nav-tabs">
           <button 
-            className={`nav-tab ${activeTab === 'upload' ? 'active' : ''}`}
-            onClick={() => setActiveTab('upload')}
+            className={`nav-tab ${activeTab === 'home' ? 'active' : ''}`}
+            onClick={() => setActiveTab('home')}
           >
-            <Upload size={18} />
-            Upload
+            <Home size={18} />
+            Home
+          </button>
+          <button 
+            className={`nav-tab ${activeTab === 'meta' ? 'active' : ''}`}
+            onClick={() => setActiveTab('meta')}
+          >
+            <Settings size={18} />
+            Meta Builder
           </button>
           <button 
             className={`nav-tab ${activeTab === 'grade' ? 'active' : ''}`}
@@ -539,11 +553,11 @@ function App() {
             Grade
           </button>
           <button 
-            className={`nav-tab ${activeTab === 'meta' ? 'active' : ''}`}
-            onClick={() => setActiveTab('meta')}
+            className={`nav-tab ${activeTab === 'upload' ? 'active' : ''}`}
+            onClick={() => setActiveTab('upload')}
           >
-            <Settings size={18} />
-            Meta Builder
+            <Upload size={18} />
+            Upload Graded
           </button>
           {processedData && (
             <>

@@ -1,6 +1,137 @@
-import { X, User, Mail, FileText, Award, FolderOpen, CheckCircle, MessageSquare, FileSignature } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, User, Mail, FileText, Award, FolderOpen, CheckCircle, MessageSquare, FileSignature, Eye, Save, Download } from 'lucide-react'
 
-function StudentModal({ student, onClose }) {
+function StudentModal({ student, onClose, quizId, onUpdateStudent, onUpdateQuestionScore }) {
+  const [viewingEvidence, setViewingEvidence] = useState(null)
+  const [editedGrades, setEditedGrades] = useState([])
+  const [hasChanges, setHasChanges] = useState(false)
+  // Inline per-question score editing state
+  const [editingQuestionId, setEditingQuestionId] = useState(null)
+  const [tempScore, setTempScore] = useState('')
+
+  useEffect(() => {
+    if (student && student.grades) {
+      setEditedGrades(JSON.parse(JSON.stringify(student.grades)))
+    }
+  }, [student])
+
+  // Inline editing helpers
+  const startEditingScore = (qId, current) => {
+    setEditingQuestionId(qId)
+    setTempScore(String(current))
+  }
+
+  const saveInlineScore = (q, index) => {
+    const newVal = parseFloat(tempScore)
+    const clamped = Number.isFinite(newVal) ? Math.min(newVal, q.maxScore || 10) : 0
+    // update local in-memory grades for immediate UI feedback
+    const updated = [...editedGrades]
+    if (typeof index === 'number' && updated[index]) updated[index].score = clamped
+    setEditedGrades(updated)
+    // push to parent memory if callback exists
+    if (onUpdateQuestionScore) {
+      const qid = q.questionId || q.question_id
+      onUpdateQuestionScore(qid, clamped)
+    }
+    // Persist to localStorage for final bulk save wiring
+    try {
+      const quizKey = quizId
+      const studentId = student?.studentId || student?.id || ''
+      const scoresPayload = editedGrades.map((qq) => ({
+        questionId: qq.questionId || qq.question_id,
+        score: qq.score,
+        maxScore: qq.maxScore
+      }))
+      const key = `${quizKey}:${studentId}`
+      const blob = { quiz_id: quizKey, student_id: studentId, scores: scoresPayload, timestamp: Date.now() }
+      const storageKey = 'quiz_scorer_per_question_scores'
+      const existing = JSON.parse(localStorage.getItem(storageKey) || '{}')
+      existing[key] = blob
+      localStorage.setItem(storageKey, JSON.stringify(existing))
+    } catch (e) {
+      // ignore storage errors
+    }
+    setEditingQuestionId(null)
+    setTempScore('')
+    setHasChanges(true)
+  }
+
+  const cancelInlineScore = () => {
+    setEditingQuestionId(null)
+    setTempScore('')
+  }
+
+  const onInlineKeyDown = (e, q, idx) => {
+    if (e.key === 'Enter') saveInlineScore(q, idx)
+    if (e.key === 'Escape') cancelInlineScore()
+  }
+
+  const handleScoreChange = (index, newScore) => {
+    const updated = [...editedGrades]
+    updated[index].score = parseFloat(newScore) || 0
+    setEditedGrades(updated)
+    setHasChanges(true)
+  }
+
+  const handleSaveChanges = () => {
+    if (onUpdateStudent) {
+      onUpdateStudent({
+        ...student,
+        grades: editedGrades
+      })
+    }
+    setHasChanges(false)
+  }
+
+  const exportToCSV = () => {
+    const headers = [
+      'Student Name', 'Email', 'Question ID', 'Question', 'Student Answer', 
+      'Correct Answer', 'Score', 'Max Score', 'Percentage', 'Question Type', 
+      'Feedback', 'Evidence Path', 'Source', 'Student ID', 'Quiz ID'
+    ]
+    
+    const rows = editedGrades.map((q, idx) => [
+      student.name,
+      student.email,
+      q.questionId || `Q${idx + 1}`,
+      q.questionText || '',
+      q.studentAnswer || '',
+      q.correctAnswer || '',
+      q.score,
+      q.maxScore,
+      student.percentage,
+      q.questionType || 'Short',
+      q.feedback || '',
+      q.evidence_path || '',
+      student.source || 'handwritten',
+      student.studentId || '',
+      quizId || student.quizId || ''
+    ])
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => `"${val}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${student.name.replace(/\s+/g, '_')}_results.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+  
+  const getBackendUrl = () => {
+    const protocol = window.location.protocol
+    const hostname = window.location.hostname
+    const port = '3000'
+    return `${protocol}//${hostname}:${port}`
+  }
+  
+  const HOST_URL = getBackendUrl()
   const getGrade = (percentage) => {
     if (percentage >= 80) return { label: 'Excellent', class: 'excellent' }
     if (percentage >= 60) return { label: 'Good', class: 'good' }
@@ -21,9 +152,30 @@ function StudentModal({ student, onClose }) {
       <div className="modal-content">
         <div className="modal-header">
           <h2>{student.name}</h2>
-          <button className="btn-icon" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button 
+              className="btn btn-outline btn-sm" 
+              onClick={exportToCSV}
+              title="Download results as CSV"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <Download size={16} />
+              CSV
+            </button>
+            {hasChanges && (
+              <button 
+                className="btn btn-primary btn-sm" 
+                onClick={handleSaveChanges}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Save size={16} />
+                Save Marks
+              </button>
+            )}
+            <button className="btn-icon" onClick={onClose}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="modal-body">
@@ -129,14 +281,50 @@ function StudentModal({ student, onClose }) {
                           </span>
                         )}
                       </div>
-                      <div className="question-score">
-                        <div className="obtained" style={{ 
-                          color: q.score === q.maxScore ? 'var(--accent-success)' : 
-                                 q.score >= q.maxScore * 0.6 ? 'var(--accent-info)' : 'var(--accent-danger)'
-                        }}>
-                          {q.score}
-                        </div>
-                        <div className="max">/ {q.maxScore}</div>
+                      <div className="question-score" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {editingQuestionId === (q.questionId || q.question_id) ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'var(--bg-tertiary)', padding: '0.25rem', borderRadius: '4px', border: '1px solid var(--accent-primary)' }}>
+                            <input
+                              type="number"
+                              autoFocus
+                              value={tempScore}
+                              onChange={(e) => setTempScore(e.target.value)}
+                              onKeyDown={(e) => onInlineKeyDown(e, q, idx)}
+                              style={{ width: '70px', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.95rem', textAlign: 'center' }}
+                              min={0}
+                              step="0.5"
+                              max={q.maxScore || 10}
+                            />
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                              / {q.maxScore}
+                            </span>
+                            <button onClick={() => saveInlineScore(q, idx)} style={{ background: 'var(--accent-success)', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', color: 'white' }} title="Save (Enter)
+">
+                              <CheckCircle size={14} />
+                            </button>
+                            <button onClick={cancelInlineScore} style={{ background: 'var(--accent-danger)', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', color: 'white' }} title="Cancel (Esc)">
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => startEditingScore(q.questionId || q.question_id, q.score)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', padding: '0.25rem 0.5rem', borderRadius: '4px',
+                              background: q.score === q.maxScore ? 'rgba(34, 197, 94, 0.15)' : (q.score >= (q.maxScore || 10) * 0.6 ? 'rgba(99, 102, 241, 0.15)' : 'rgba(239, 68, 68, 0.15)'),
+                              border: '1px solid ' + (q.score === q.maxScore ? 'rgba(34, 197, 94, 0.3)' : (q.score >= (q.maxScore || 10) * 0.6 ? 'rgba(99, 102, 241, 0.3)' : 'rgba(239, 68, 68, 0.3)'))
+                            }}
+                            title="Click to edit score"
+                          >
+                            <div className="obtained" style={{ fontSize: '0.95rem', fontWeight: '700' }}>{q.score}</div>
+                            <div className="max" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                              / {q.maxScore}
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)' }}>
+                              <span style={{ display: 'inline-block', transform: 'translateY(1px)' }}>✎</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -156,27 +344,119 @@ function StudentModal({ student, onClose }) {
                     {/* Student Answer */}
                     <div className="answer-section">
                       <div className="answer-label">
-                        <MessageSquare size={12} style={{ marginRight: 4 }} />
-                        Student's Answer
-                        {/* Show confidence inline with student answer - subtle display */}
-                        {(q.confidence || student.source === 'handwritten') && (
-                          <span style={{ 
-                            marginLeft: '0.5rem',
-                            fontSize: '0.7rem',
-                            color: q.confidence >= 0.9 ? 'var(--accent-success)' : 
-                                   q.confidence >= 0.7 ? 'var(--accent-warning)' : 'var(--accent-danger)',
-                            fontWeight: 'normal',
-                            opacity: 0.8
-                          }}>
-                            ({q.confidence ? Math.round(q.confidence * 100) + '%' : ''})
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          <MessageSquare size={12} style={{ marginRight: 4 }} />
+                          Student's Answer
+                          {(q.confidence || student.source === 'handwritten') && (
+                            <span style={{ 
+                              marginLeft: '0.5rem',
+                              fontSize: '0.7rem',
+                              color: q.confidence >= 0.9 ? 'var(--accent-success)' : 
+                                     q.confidence >= 0.7 ? 'var(--accent-warning)' : 'var(--accent-danger)',
+                              fontWeight: 'normal',
+                              opacity: 0.8
+                            }}>
+                              ({q.confidence ? Math.round(q.confidence * 100) + '%' : ''})
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Removed old score input box; inline header editing now handles updates. */}
+                        {student.source === 'handwritten' && (
+                          <button 
+                            className="btn btn-primary btn-sm"
+                            onClick={() => setViewingEvidence(viewingEvidence === `RESOLVE:${q.questionId}` ? null : `RESOLVE:${q.questionId}`)}
+                            style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '0.4rem',
+                              background: viewingEvidence === `RESOLVE:${q.questionId}` ? 'var(--accent-secondary)' : 'var(--accent-primary)',
+                              border: 'none',
+                              color: 'white',
+                              padding: '0.4rem 0.8rem',
+                              borderRadius: '4px',
+                              transition: 'all 0.2s',
+                              fontWeight: '600',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            <Eye size={12} />
+                            View Evidence
+                          </button>
                         )}
                       </div>
                       <div className="student-answer">
                         {q.studentAnswer || q.student_answer || <em style={{ color: 'var(--text-muted)' }}>No answer provided</em>}
                       </div>
-                    </div>
-
+                      </div>
+                      
+                      {/* Inline Evidence Display */}
+                      {viewingEvidence === (student.source === 'handwritten' ? `RESOLVE:${q.questionId}` : (q.evidence_path || q.evidencePath)) && (
+                        <div style={{ 
+                          marginTop: '1rem', 
+                          padding: '1rem', 
+                          background: 'rgba(0,0,0,0.2)', 
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-color)',
+                          position: 'relative',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.5rem'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase' }}>
+                              Handwritten Evidence
+                            </span>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setViewingEvidence(null); }}
+                              style={{ 
+                                background: 'transparent', 
+                                border: 'none', 
+                                color: 'var(--text-secondary)', 
+                                cursor: 'pointer',
+                                padding: '2px'
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <img 
+                            src={viewingEvidence.startsWith('RESOLVE:') 
+                              ? `${HOST_URL}/storage/evidence/${quizId || 'unknown'}/${student.studentId || student.id}/resolve/${viewingEvidence.split(':')[1].replace(/\D/g, '')}`
+                              : `${HOST_URL}/storage/evidence/${quizId || 'unknown'}/${viewingEvidence}`
+                            } 
+                            alt="Handwritten Evidence"
+                            style={{ 
+                              width: '100%', 
+                              maxHeight: '400px', 
+                              objectFit: 'contain', 
+                              borderRadius: '4px',
+                              background: '#000'
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div style={{ 
+                            display: 'none', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            padding: '2rem',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            borderRadius: '4px',
+                            border: '1px dashed var(--accent-danger)',
+                            color: 'var(--accent-danger)',
+                            gap: '0.5rem'
+                          }}>
+                            <X size={24} />
+                            <span style={{ fontWeight: '600' }}>Evidence Not Found</span>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>No submission image found for this question.</span>
+                          </div>
+                        </div>
+                      )}
+                    
                     {/* Reference Answer (if available) */}
                     {(q.correctAnswer || q.correct_answer) && (
                       <div className="answer-section">

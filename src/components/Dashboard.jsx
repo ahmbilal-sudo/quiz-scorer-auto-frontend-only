@@ -1,14 +1,54 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Chart, registerables } from 'chart.js'
-import { Users, TrendingUp, CheckCircle, HelpCircle, BarChart3, PieChart, Award, BarChart } from 'lucide-react'
+import { Users, TrendingUp, CheckCircle, HelpCircle, BarChart3, PieChart, Award, BarChart, ChevronDown, ChevronUp, BarChart2, Activity } from 'lucide-react'
+import StudentsTable from './StudentsTable'
+import QuestionsAnalysis from './QuestionsAnalysis'
 
 Chart.register(...registerables)
 
-function Dashboard({ data, devMode = false }) {
+function Dashboard({ data, devMode = false, onCompareSelect }) {
+  const [perQuestionScores, setPerQuestionScores] = useState({})
+  const handleUpdateQuestionScoreGlobal = (questionId, newScore) => {
+    setPerQuestionScores(prev => ({ ...prev, [String(questionId)]: newScore }))
+  }
   const scoreDistChartRef = useRef(null)
   const gradeDistChartRef = useRef(null)
-  const questionPerfChartRef = useRef(null)
   const topPerfChartRef = useRef(null)
+  const questionTypeChartRef = useRef(null)
+  const questionDiffChartRef = useRef(null)
+  const allQuestionsChartRef = useRef(null)
+  
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+  
+  const createChartSafe = (canvasId, chartConfig) => {
+    if (!mountedRef.current) return null
+    
+    const canvas = document.getElementById(canvasId)
+    if (!canvas) {
+      console.warn(`Dashboard: Canvas "${canvasId}" not found in DOM`)
+      return null
+    }
+    
+    try {
+      const existingChart = Chart.getChart(canvas)
+      if (existingChart) {
+        existingChart.destroy()
+      }
+      return new Chart(canvas, chartConfig)
+    } catch (err) {
+      console.error(`Dashboard: Failed to create chart "${canvasId}":`, err)
+      return null
+    }
+  }
+
+  const [compareMode, setCompareMode] = useState(false)
+  const [showQuestions, setShowQuestions] = useState(false)
 
   const { students, questions } = data
 
@@ -41,7 +81,23 @@ function Dashboard({ data, devMode = false }) {
   // Question performance
   const sortedQuestions = [...questions].sort((a, b) => b.avgPercentage - a.avgPercentage)
 
+  // Question type distribution
+  const questionTypes = [...new Set(questions.map(q => q.type))].filter(Boolean)
+  const questionTypeCounts = questionTypes.map(type => 
+    questions.filter(q => q.type === type).length
+  )
+
+  // Question difficulty breakdown
+  const easyCount = questions.filter(q => q.avgPercentage >= 70).length
+  const mediumCount = questions.filter(q => q.avgPercentage >= 40 && q.avgPercentage < 70).length
+  const hardCount = questions.filter(q => q.avgPercentage < 40).length
+
   useEffect(() => {
+    // Guard: ensure we have valid data
+    if (!data || !students || !questions || students.length === 0) {
+      return
+    }
+
     const chartOptions = {
       responsive: true,
       maintainAspectRatio: false,
@@ -61,11 +117,22 @@ function Dashboard({ data, devMode = false }) {
       }
     }
 
-    // Score Distribution Chart
-    if (scoreDistChartRef.current) {
-      scoreDistChartRef.current.destroy()
+    const doughnutOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#f0f0f0', padding: 15 }
+        }
+      }
     }
-    scoreDistChartRef.current = new Chart(document.getElementById('scoreDistributionChart'), {
+
+    // Score Distribution Chart
+    const scoreCanvas = document.getElementById('scoreDistributionChart')
+    if (!scoreCanvas) { return }
+    if (scoreDistChartRef.current) scoreDistChartRef.current.destroy()
+    scoreDistChartRef.current = createChartSafe('scoreDistributionChart', {
       type: 'bar',
       data: {
         labels: scoreRanges,
@@ -85,11 +152,8 @@ function Dashboard({ data, devMode = false }) {
       options: chartOptions
     })
 
-    // Grade Distribution Chart
-    if (gradeDistChartRef.current) {
-      gradeDistChartRef.current.destroy()
-    }
-    gradeDistChartRef.current = new Chart(document.getElementById('gradeDistributionChart'), {
+      // Grade Distribution Chart
+      gradeDistChartRef.current = createChartSafe('gradeDistributionChart', {
       type: 'doughnut',
       data: {
         labels: ['Excellent (≥80%)', 'Good (60-79%)', 'Average (40-59%)', 'Poor (<40%)'],
@@ -104,44 +168,98 @@ function Dashboard({ data, devMode = false }) {
           borderWidth: 0
         }]
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { color: '#f0f0f0', padding: 15 }
-          }
-        }
-      }
+      options: doughnutOptions
     })
 
-    // Question Performance Chart
-    if (questionPerfChartRef.current) {
-      questionPerfChartRef.current.destroy()
+    // Question Type Distribution Chart
+    const typeCanvas = document.getElementById('questionTypeChart')
+    if (typeCanvas) {
+      if (questionTypeChartRef.current) questionTypeChartRef.current.destroy()
+      const typeColors = {
+        MCQ: 'rgba(59, 130, 246, 0.9)',
+        Short: 'rgba(34, 197, 94, 0.9)',
+        Long: 'rgba(168, 85, 247, 0.9)',
+        PI: 'rgba(156, 163, 175, 0.9)',
+        Blank: 'rgba(245, 158, 11, 0.9)',
+        'One-Word Answer': 'rgba(239, 68, 68, 0.9)'
+      }
+      questionTypeChartRef.current = createChartSafe('questionTypeChart', {
+        type: 'doughnut',
+        data: {
+          labels: questionTypes,
+          datasets: [{
+            data: questionTypeCounts,
+            backgroundColor: questionTypes.map(t => typeColors[t] || 'rgba(99, 102, 241, 0.9)'),
+            borderWidth: 0
+          }]
+        },
+        options: doughnutOptions
+      })
     }
-    questionPerfChartRef.current = new Chart(document.getElementById('questionPerformanceChart'), {
+
+    // Question Difficulty Breakdown Chart
+    if (questionDiffChartRef.current) {
+      questionDiffChartRef.current.destroy()
+    }
+    questionDiffChartRef.current = createChartSafe('questionDiffChart', {
       type: 'bar',
       data: {
-        labels: sortedQuestions.slice(0, 8).map(q => q.id),
+        labels: ['Easy (≥70%)', 'Medium (40-69%)', 'Hard (<40%)'],
+        datasets: [{
+          label: 'Questions',
+          data: [easyCount, mediumCount, hardCount],
+          backgroundColor: [
+            'rgba(34, 197, 94, 0.8)',
+            'rgba(245, 158, 11, 0.8)',
+            'rgba(239, 68, 68, 0.8)'
+          ],
+          borderRadius: 8
+        }]
+      },
+      options: chartOptions
+    })
+
+    // All Questions Performance Chart
+    const allCanvas = document.getElementById('allQuestionsChart')
+    if (allCanvas) {
+      if (allQuestionsChartRef.current) allQuestionsChartRef.current.destroy()
+      allQuestionsChartRef.current = createChartSafe('allQuestionsChart', {
+        type: 'bar',
+      data: {
+        labels: sortedQuestions.map((q, idx) => `Q${idx + 1}`),
         datasets: [{
           label: 'Avg Score %',
-          data: sortedQuestions.slice(0, 8).map(q => q.avgPercentage),
-          backgroundColor: 'rgba(99, 102, 241, 0.8)',
-          borderRadius: 6
+          data: sortedQuestions.map(q => q.avgPercentage),
+          backgroundColor: sortedQuestions.map(q => 
+            q.avgPercentage >= 70 ? 'rgba(34, 197, 94, 0.6)' :
+            q.avgPercentage >= 40 ? 'rgba(245, 158, 11, 0.6)' :
+            'rgba(239, 68, 68, 0.6)'
+          ),
+          borderRadius: 4
         }]
       },
       options: {
         ...chartOptions,
-        indexAxis: 'y'
+        scales: {
+          ...chartOptions.scales,
+          x: {
+            ...chartOptions.scales.x,
+            ticks: { ...chartOptions.scales.x.ticks, maxRotation: 0, font: { size: 10 } }
+          },
+          y: {
+            ...chartOptions.scales.y,
+            max: 100
+          }
+        }
       }
     })
+  }
 
     // Top Performers Chart
     if (topPerfChartRef.current) {
       topPerfChartRef.current.destroy()
     }
-    topPerfChartRef.current = new Chart(document.getElementById('topPerformersChart'), {
+    topPerfChartRef.current = createChartSafe('topPerformersChart', {
       type: 'bar',
       data: {
         labels: topStudents.map(s => s.name.length > 12 ? s.name.substring(0, 12) + '...' : s.name),
@@ -163,14 +281,23 @@ function Dashboard({ data, devMode = false }) {
         }
       }
     })
-
+    
     return () => {
-      scoreDistChartRef.current?.destroy()
-      gradeDistChartRef.current?.destroy()
-      questionPerfChartRef.current?.destroy()
-      topPerfChartRef.current?.destroy()
+      mountedRef.current = false
+      ;[scoreDistChartRef, gradeDistChartRef, 
+        topPerfChartRef, questionTypeChartRef, questionDiffChartRef, allQuestionsChartRef
+      ].forEach(ref => {
+        try {
+          if (ref.current) {
+            ref.current.destroy()
+            ref.current = null
+          }
+        } catch (e) {
+          console.warn('Dashboard: Error during chart cleanup:', e)
+        }
+      })
     }
-  }, [data])
+  }, [data]);
 
   return (
     <div className="main-content">
@@ -222,31 +349,7 @@ function Dashboard({ data, devMode = false }) {
             <canvas id="scoreDistributionChart"></canvas>
           </div>
         </div>
-
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <PieChart />
-              Grade Distribution
-            </div>
-          </div>
-          <div style={{ height: '250px' }}>
-            <canvas id="gradeDistributionChart"></canvas>
-          </div>
-        </div>
-
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <BarChart />
-              Performance by Question
-            </div>
-          </div>
-          <div style={{ height: '280px' }}>
-            <canvas id="questionPerformanceChart"></canvas>
-          </div>
-        </div>
-
+        
         <div className="chart-card">
           <div className="chart-header">
             <div className="chart-title">
@@ -257,6 +360,57 @@ function Dashboard({ data, devMode = false }) {
           <div style={{ height: '280px' }}>
             <canvas id="topPerformersChart"></canvas>
           </div>
+        </div>
+
+        {/* New Charts */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <div className="chart-title">
+              <PieChart />
+              Question Type Distribution
+            </div>
+          </div>
+          {questionTypes.length === 0 ? (
+            <div style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexDirection: 'column', gap: '0.5rem' }}>
+              <PieChart size={32} style={{ opacity: 0.5 }} />
+              <p>No question type data</p>
+            </div>
+          ) : (
+            <div style={{ height: '250px' }}>
+              <canvas id="questionTypeChart"></canvas>
+            </div>
+          )}
+        </div>
+
+        <div className="chart-card">
+          <div className="chart-header">
+            <div className="chart-title">
+              <BarChart2 />
+              Question Difficulty Breakdown
+            </div>
+          </div>
+          <div style={{ height: '250px' }}>
+            <canvas id="questionDiffChart"></canvas>
+          </div>
+        </div>
+
+        <div className="chart-card">
+          <div className="chart-header">
+            <div className="chart-title">
+              <Activity />
+              All Questions Performance
+            </div>
+          </div>
+          {questions.length === 0 ? (
+            <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexDirection: 'column', gap: '0.5rem' }}>
+              <Activity size={32} style={{ opacity: 0.5 }} />
+              <p>No questions data available</p>
+            </div>
+          ) : (
+            <div style={{ height: '300px' }}>
+              <canvas id="allQuestionsChart"></canvas>
+            </div>
+          )}
         </div>
       </div>
 
@@ -297,6 +451,67 @@ function Dashboard({ data, devMode = false }) {
               </ul>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Students Table (non-devMode only) */}
+      {!devMode && (
+        <div style={{ marginTop: '2rem' }}>
+          <StudentsTable 
+            data={data} 
+            showCompareBtn={true}
+            onStartCompare={() => setCompareMode(true)}
+            compareMode={compareMode}
+            onUpdateQuestionScoreGlobal={handleUpdateQuestionScoreGlobal}
+            onCompareSelect={(selectedStudents) => {
+              setCompareMode(false)
+              if (onCompareSelect) {
+                onCompareSelect(selectedStudents)
+              }
+            }}
+            onNavigateToCompare={() => {
+              setCompareMode(false)
+              if (onNavigateToCompare) {
+                onNavigateToCompare()
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* Questions Analysis (collapsed by default, non-devMode only) */}
+      {!devMode && (
+        <div style={{ marginTop: '2rem' }}>
+          <div 
+            onClick={() => setShowQuestions(!showQuestions)}
+            style={{
+              padding: '1rem',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <HelpCircle size={20} style={{ color: 'var(--accent-primary)' }} />
+              <span style={{ fontWeight: '600' }}>Questions Analysis ({questions.length} questions)</span>
+              <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <span>Easy: {questions.filter(q => q.avgPercentage >= 70).length}</span>
+                <span>Medium: {questions.filter(q => q.avgPercentage >= 40 && q.avgPercentage < 70).length}</span>
+                <span>Hard: {questions.filter(q => q.avgPercentage < 40).length}</span>
+              </div>
+            </div>
+            {showQuestions ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+          
+          {showQuestions && (
+            <div style={{ marginTop: '1rem' }}>
+              <QuestionsAnalysis data={data} />
+            </div>
+          )}
         </div>
       )}
     </div>

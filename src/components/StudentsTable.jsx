@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react'
-import { Search, ChevronUp, ChevronDown, Eye, Download } from 'lucide-react'
+import { Search, ChevronUp, ChevronDown, Eye, Download, GitCompare, Check, X } from 'lucide-react'
 import StudentModal from './StudentModal'
 
-function StudentsTable({ data }) {
+function StudentsTable({ data, quizId: propQuizId, onUpdateStudent, onSaveToHistory, compareMode = false, onCompareSelect, onStartCompare, showCompareBtn = false, onNavigateToCompare }) {
   const { students } = data
   const [searchTerm, setSearchTerm] = useState('')
   const [gradeFilter, setGradeFilter] = useState('all')
   const [sortConfig, setSortConfig] = useState({ key: 'percentage', direction: 'desc' })
   const [selectedStudent, setSelectedStudent] = useState(null)
+  const [selectedForCompare, setSelectedForCompare] = useState([])
 
   const getGrade = (percentage) => {
     if (percentage >= 80) return { label: 'Excellent', class: 'excellent' }
@@ -88,11 +89,42 @@ function StudentsTable({ data }) {
     )
   }
 
+  const handleRowClick = (student) => {
+    setSelectedStudent(student)
+  }
+
+  const toggleStudentForCompare = (studentId) => {
+    setSelectedForCompare(prev => {
+      if (prev.includes(studentId)) {
+        return prev.filter(id => id !== studentId)
+      }
+      if (prev.length >= 2) {
+        return [prev[1], studentId]
+      }
+      return [...prev, studentId]
+    })
+  }
+
+  const handleCompareSelected = () => {
+    if (selectedForCompare.length === 2) {
+      const selectedStudents = students.filter(s => selectedForCompare.includes(s.id))
+      if (onCompareSelect) {
+        onCompareSelect(selectedStudents)
+      }
+      if (onNavigateToCompare) {
+        onNavigateToCompare()
+      }
+    }
+  }
+
   const exportToCSV = () => {
-    const headers = ['Name', 'Email', 'Total Score', 'Max Score', 'Percentage', 'Grade']
-    const rows = filteredAndSortedStudents.map(s => [
+    const headers = ['Student Name', 'Email', 'Student ID', 'Quiz ID', 'Source', 'Total Score', 'Max Score', 'Percentage', 'Grade']
+    const rows = (filteredAndSortedStudents || []).map(s => [
       s.name,
       s.email,
+      s.studentId || '',
+      s.quizId || quizId || '',
+      s.source || 'csv',
       s.totalScore,
       s.maxScore,
       s.percentage.toFixed(2) + '%',
@@ -117,10 +149,22 @@ function StudentsTable({ data }) {
     <div className="main-content">
       <div className="table-container">
         <div className="table-header">
-          <h3>
-            <Download size={20} />
-            Student Results
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <h3>
+              <Download size={20} />
+              Student Results
+            </h3>
+            {showCompareBtn && (
+              <button
+                className="btn btn-primary"
+                onClick={onStartCompare}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              >
+                <GitCompare size={16} />
+                Compare
+              </button>
+            )}
+          </div>
           
           <div className="table-filters">
             <div className="search-wrapper">
@@ -146,6 +190,12 @@ function StudentsTable({ data }) {
               <option value="poor">Poor</option>
             </select>
 
+            {onSaveToHistory && (
+              <button className="btn btn-primary" onClick={() => onSaveToHistory(data)}>
+                <Check size={16} />
+                Sync to History
+              </button>
+            )}
             <button className="btn btn-outline" onClick={exportToCSV}>
               <Download size={16} />
               Export CSV
@@ -153,10 +203,37 @@ function StudentsTable({ data }) {
           </div>
         </div>
 
+        {compareMode && (
+          <div style={{
+            padding: '0.75rem 1rem',
+            background: 'rgba(139, 92, 246, 0.1)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+              <Check size={16} style={{ color: 'var(--accent-primary)' }} />
+              <span>Comparison mode: Select 2 students ({selectedForCompare.length}/2)</span>
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={handleCompareSelected}
+              disabled={selectedForCompare.length !== 2}
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            >
+              Compare Selected
+            </button>
+          </div>
+        )}
+
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
+                {compareMode && <th style={{ width: '50px' }}></th>}
                 <th className="sortable" onClick={() => handleSort('name')}>
                   Student Name
                   <SortIcon column="name" />
@@ -171,15 +248,45 @@ function StudentsTable({ data }) {
                   <SortIcon column="percentage" />
                 </th>
                 <th>Grade</th>
-                <th>Actions</th>
+                {!compareMode && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {filteredAndSortedStudents.map((student) => {
                 const grade = getGrade(student.percentage)
+                const isSelected = selectedForCompare.includes(student.id)
                 return (
-                  <tr key={student.id}>
-                    <td>{student.name}</td>
+                  <tr 
+                    key={student.id}
+                    onClick={() => compareMode ? toggleStudentForCompare(student.id) : handleRowClick(student)}
+                    style={{ 
+                      cursor: compareMode ? 'pointer' : 'default',
+                      background: isSelected ? 'rgba(139, 92, 246, 0.1)' : undefined
+                    }}
+                  >
+                    {compareMode && (
+                      <td style={{ textAlign: 'center' }}>
+                        {isSelected && <Check size={16} style={{ color: 'var(--accent-primary)' }} />}
+                      </td>
+                    )}
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {student.name}
+                        {student.source === 'handwritten' && (
+                          <span style={{ 
+                            background: 'rgba(245, 158, 11, 0.15)', 
+                            color: 'var(--accent-warning)',
+                            padding: '0.1rem 0.4rem',
+                            borderRadius: '4px',
+                            fontSize: '0.7rem',
+                            fontWeight: 'bold',
+                            border: '1px solid rgba(245, 158, 11, 0.3)'
+                          }}>
+                            📝 Handwritten
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td>{student.email || '-'}</td>
                     <td>{student.totalScore.toFixed(1)} / {student.maxScore}</td>
                     <td>
@@ -198,15 +305,17 @@ function StudentsTable({ data }) {
                         {grade.label}
                       </span>
                     </td>
-                    <td>
-                      <button 
-                        className="btn btn-outline btn-sm"
-                        onClick={() => setSelectedStudent(student)}
-                      >
-                        <Eye size={16} />
-                        View
-                      </button>
-                    </td>
+                    {!compareMode && (
+                      <td>
+                        <button 
+                          className="btn btn-outline btn-sm"
+                          onClick={(e) => { e.stopPropagation(); setSelectedStudent(student); }}
+                        >
+                          <Eye size={16} />
+                          View
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -219,6 +328,22 @@ function StudentsTable({ data }) {
         <StudentModal 
           student={selectedStudent} 
           onClose={() => setSelectedStudent(null)} 
+          quizId={data.quiz_id || data.quizId || selectedStudent.quizId}
+          onUpdateStudent={onUpdateStudent}
+          onUpdateQuestionScore={(qid, newScore) => {
+            // optimistic in-memory update: write to selectedStudent.grades
+            if (selectedStudent && Array.isArray(selectedStudent.grades)) {
+              const idx = selectedStudent.grades.findIndex(g => (g.questionId || g.question_id) === qid)
+              if (idx !== -1) {
+                selectedStudent.grades[idx].score = newScore
+              }
+              // trigger a re-render by mutating state and calling parent update if available
+              // Note: this is in-memory only until final save
+              if (typeof onUpdateStudent === 'function') {
+                onUpdateStudent({ ...selectedStudent, grades: selectedStudent.grades })
+              }
+            }
+          }}
         />
       )}
     </div>

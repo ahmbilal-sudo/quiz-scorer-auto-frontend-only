@@ -1,10 +1,17 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ArrowLeftRight, Trophy, Target, TrendingUp, Minus, ArrowRight } from 'lucide-react'
 
-function StudentCompare({ data }) {
+function StudentCompare({ data, initialStudents = null }) {
   const { students, questions } = data
   const [student1Id, setStudent1Id] = useState('')
   const [student2Id, setStudent2Id] = useState('')
+
+  useEffect(() => {
+    if (initialStudents && initialStudents.length === 2) {
+      setStudent1Id(initialStudents[0].id)
+      setStudent2Id(initialStudents[1].id)
+    }
+  }, [initialStudents])
 
   const student1 = students.find(s => s.id === student1Id)
   const student2 = students.find(s => s.id === student2Id)

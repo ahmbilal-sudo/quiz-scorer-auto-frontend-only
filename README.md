@@ -1,3 +1,9 @@
+
+
+npm install
+npm run dev
+
+
 SETUP INSTRUCTIONS
 ==================
 
@@ -14,43 +20,20 @@ If the backend folder is not included in this repository, follow these steps:
 
    c) Clone the frontend repository:
       git clone https://github.com/ahmbilal-sudo/quiz-scorer-auto-frontend-only.git
-   
-   d) Checkout the updated-testing branch (NOT main):
-      git checkout updated-testing
 
-   e) Rename the frontend directory:
+   d) Rename the frontend directory:
       rename folder name from 'quiz-scorer-auto-frontend-only' to 'frontend'
+      if not, you have to use 'quiz-scorer-auto-frontend-only' in the place of 'frontend' for the setup commands
 
 
-2. INSTALL DEPENDENCIES
+3. INSTALL DEPENDENCIES
    =====================
-   
-   Backend:
-   --------
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
    
    Frontend:
    ---------
-   cd frontend
+   cd quiz-scorer-auto-frontend-only
    npm install
-   cd ..
-
-
-3. SETUP ENVIRONMENT FILES
-   =======================
-   
-   a) Create .env file from template:
-      cp .env.example .env
-   
-   b) Create client_secrets.json from template:
-      cp client_secrets.json.example client_secrets.json
-   
-   c) Edit both files and add your Google API credentials:
-      - GOOGLE_GENAI_API_KEY (required - get from https://ai.google.dev/)
-      - GOOGLE_CLIENT_ID (optional - for OAuth)
-      - GOOGLE_CLIENT_SECRET (optional - for OAuth)
+   npm run dev
 
 
 4. RUN WITH DOCKER COMPOSE (RECOMMENDED)
@@ -81,15 +64,15 @@ If the backend folder is not included in this repository, follow these steps:
    
    Terminal 2 (Frontend):
    ----------------------
-   cd frontend
+   cd quiz-scorer-auto-frontend-only (or the folder name if changed)
    npm run dev
    # Frontend will run on http://localhost:5173
 
 
-6. IMPORTANT NOTES
+7. IMPORTANT NOTES
    ================
    
-   - Make sure frontend/ folder is in the SAME directory as api.py and requirements.txt
+   - Make sure frontend/ (please rename 'quiz-scorer-auto-frontend-only' folder to 'frontend') folder is in the SAME directory as api.py and requirements.txt
    - The frontend must be from the 'updated-testing' branch, NOT main
    - Never commit .env or client_secrets.json to version control
    - Backend API must be running before frontend can connect to it
@@ -97,7 +80,7 @@ If the backend folder is not included in this repository, follow these steps:
    - For production, change DEBUG=false and SECRET_KEY in .env
 
 
-7. VERIFY SETUP
+8. VERIFY SETUP
    =============
    
    After running:
